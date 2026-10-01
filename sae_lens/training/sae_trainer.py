@@ -256,7 +256,11 @@ class SAETrainer(Generic[T_TRAINING_SAE, T_TRAINING_SAE_CONFIG]):
                     )
 
         if self.save_checkpoint_fn is not None:
-            self.save_checkpoint_fn(checkpoint_path=checkpoint_path)
+            # Without a base path, the checkpoint above only went to a temp dir
+            # for the wandb upload, and that dir has been deleted.
+            self.save_checkpoint_fn(
+                checkpoint_path=checkpoint_path if base is not None else None
+            )
 
     def step(self, batch: torch.Tensor) -> TrainStepOutput:
         """

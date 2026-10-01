@@ -391,15 +391,22 @@ def test_checkpoints_save_runner_cfg(
         assert runner_cfg == expected_cfg
 
 
+@pytest.mark.usefixtures("captured_wandb_logs")
+@pytest.mark.parametrize("log_to_wandb", [False, True])
 def test_skips_saving_checkpoint_when_checkpoint_path_is_none(
     ts_model: HookedTransformer,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    log_to_wandb: bool,
 ):
+    monkeypatch.chdir(tmp_path)
     cfg = build_runner_cfg(
         checkpoint_path=None,
         training_tokens=100,  # Increased to ensure we hit checkpoints
         context_size=8,
         n_checkpoints=2,  # Explicitly request 2 checkpoints during training
         save_final_checkpoint=True,  # Enable final checkpoint
+        logger=LoggingConfig(log_to_wandb=log_to_wandb),
     )
     trainer_cfg = cfg.to_sae_trainer_config()
 
@@ -423,8 +430,11 @@ def test_skips_saving_checkpoint_when_checkpoint_path_is_none(
         save_checkpoint_fn=runner.save_checkpoint,
     )
 
-    # Train the model - this should create checkpoints
+    # fit() reaches the checkpoint steps, but nothing should be saved locally.
+    # With wandb on, checkpoints still go through a temp dir for the upload.
     trainer.fit()
+
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_estimated_norm_scaling_factor_persistence(
