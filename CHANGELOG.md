@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v6.51.5 (2026-10-01)
+
+### Fix
+
+* fix: keep checkpoint_path=None so checkpoint saving can be disabled (#743) ([`0df2c95`](https://github.com/decoderesearch/SAELens/commit/0df2c95ad1e034ee328957f2ade6434b8f782f5c))
+
 ## v6.51.4 (2026-10-01)
 
 ### Fix
