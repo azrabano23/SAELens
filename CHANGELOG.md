@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## v6.51.6 (2026-10-01)
+
+### Fix
+
+* fix: restore coefficient scheduler value when loading trainer state (#745) ([`51aafc7`](https://github.com/decoderesearch/SAELens/commit/51aafc7851ff2a4c5408b3c24123e296cf3b7c83))
+
 ## v6.51.5 (2026-10-01)
 
 ### Fix
