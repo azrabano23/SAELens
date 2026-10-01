@@ -168,11 +168,18 @@ class MultiSAETrainer:
     @torch.no_grad()
     def _estimate_scaling_factors(self) -> None:
         """Estimate per-SAE activation scaling from a shared set of multi-hook batches."""
+        # Statistics loaded from a checkpoint are kept, as in SAETrainer.fit.
         needs = [
             name
             for name, sae in self.saes.items()
-            if sae.cfg.normalize_activations
-            in ("expected_average_only_in", "covariance_whitening")
+            if (
+                sae.cfg.normalize_activations == "expected_average_only_in"
+                and self.trainers[name].activation_scaler.scaling_factor is None
+            )
+            or (
+                sae.cfg.normalize_activations == "covariance_whitening"
+                and self.trainers[name].activation_scaler.whitening is None
+            )
         ]
         if not needs:
             return

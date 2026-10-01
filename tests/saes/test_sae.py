@@ -291,6 +291,12 @@ def test_TrainingSAE_fold_activation_norm_scaling_factor_all_architectures(
         assert_close(folded_features, original_features)
 
 
+# matching pursuit rejects covariance_whitening in its config, see test_matching_pursuit_sae
+WHITENING_TRAINING_ARCHITECTURES = [
+    arch for arch in ALL_TRAINING_ARCHITECTURES if arch != "matching_pursuit"
+]
+
+
 def _estimate_whitening_scaler(d_in: int) -> tuple[ActivationScaler, torch.Tensor]:
     provider = correlated_activations(d_in, batch_size=256)
     scaler = ActivationScaler()
@@ -310,7 +316,7 @@ def _fold_scaler_whitening(sae: SAE[Any], scaler: ActivationScaler) -> None:
 
 
 @pytest.mark.parametrize("apply_b_dec_to_input", [True, False])
-@pytest.mark.parametrize("architecture", ALL_TRAINING_ARCHITECTURES)
+@pytest.mark.parametrize("architecture", WHITENING_TRAINING_ARCHITECTURES)
 def test_TrainingSAE_fold_activation_whitening_all_architectures(
     architecture: str, apply_b_dec_to_input: bool
 ):
@@ -326,13 +332,13 @@ def test_TrainingSAE_fold_activation_whitening_all_architectures(
     scaler, inputs = _estimate_whitening_scaler(cfg.d_in)
     inputs = inputs.to(torch.float64)
 
-    if architecture == "matching_pursuit":
-        with pytest.raises(NotImplementedError):
-            _fold_scaler_whitening(sae, scaler)
-        return
-
+    # random_params leaves b_dec in [0, 1), which with apply_b_dec_to_input pushes
+    # nearly every pre-activation negative. Center it so the encoder path is exercised.
+    sae.b_dec.data -= 0.5
     whitened_features = sae.encode(scaler.scale(inputs))
     whitened_outputs = scaler.unscale(sae(scaler.scale(inputs)))
+    # a few percent of features must be active, otherwise the encoder check is vacuous
+    assert (whitened_features != 0).double().mean() > 0.01
 
     _fold_scaler_whitening(sae, scaler)
 
@@ -360,14 +366,47 @@ def test_SAE_fold_activation_whitening_all_architectures(
             _fold_scaler_whitening(sae, scaler)
         return
 
+    # random_params leaves b_dec in [0, 1), which with apply_b_dec_to_input pushes
+    # nearly every pre-activation negative. Center it so the encoder path is exercised.
+    sae.b_dec.data -= 0.5
     whitened_features = sae.encode(scaler.scale(inputs))
     whitened_outputs = scaler.unscale(sae(scaler.scale(inputs)))
+    # a few percent of features must be active, otherwise the encoder check is vacuous
+    assert (whitened_features != 0).double().mean() > 0.01
 
     _fold_scaler_whitening(sae, scaler)
 
     assert sae.cfg.normalize_activations == "none"
     assert_close(sae.encode(inputs), whitened_features)
     assert_close(sae(inputs), whitened_outputs)
+
+
+@pytest.mark.parametrize("architecture", WHITENING_TRAINING_ARCHITECTURES)
+def test_TrainingSAE_fold_activation_whitening_then_save_inference_model_matches_whitened_inference(
+    architecture: str, tmp_path: Path
+):
+    cfg = build_sae_training_cfg_for_arch(
+        architecture, normalize_activations="covariance_whitening", dtype="float64"
+    )
+    sae = get_sae_training_class(architecture)[0](cfg)
+    random_params(sae)
+    scaler, inputs = _estimate_whitening_scaler(cfg.d_in)
+    inputs = inputs.to(torch.float64)
+
+    sae.save_inference_model(tmp_path / "unfolded")
+    unfolded = SAE.load_from_disk(str(tmp_path / "unfolded"), dtype="float64")
+    whitened_features = unfolded.encode(scaler.scale(inputs))
+    whitened_outputs = scaler.unscale(unfolded(scaler.scale(inputs)))
+    # a few percent of features must be active, otherwise the encoder check is vacuous
+    assert (whitened_features != 0).double().mean() > 0.01
+
+    _fold_scaler_whitening(sae, scaler)
+    sae.save_inference_model(tmp_path / "folded")
+    folded = SAE.load_from_disk(str(tmp_path / "folded"), dtype="float64")
+
+    assert folded.cfg.normalize_activations == "none"
+    assert_close(folded.encode(inputs), whitened_features)
+    assert_close(folded(inputs), whitened_outputs)
 
 
 def test_TrainingSAE_fold_activation_whitening_float32_matches_within_1e_5():

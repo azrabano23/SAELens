@@ -1,3 +1,4 @@
+import copy
 import json
 from pathlib import Path
 from typing import Any, Callable
@@ -35,7 +36,9 @@ from tests.helpers import (
     assert_not_close,
     build_runner_cfg,
     build_sae_training_cfg,
+    correlated_activations,
     load_model_cached,
+    random_params,
 )
 
 
@@ -546,6 +549,71 @@ def test_SAETrainer_fit_with_covariance_whitening_folds_whitening_into_the_sae(
     assert sae.cfg.normalize_activations == "none"
     with open(next(checkpoint_dir.glob("final_*/cfg.json"))) as f:
         assert json.load(f)["normalize_activations"] == "none"
+
+
+@pytest.mark.parametrize(
+    "normalize_activations", ["expected_average_only_in", "covariance_whitening"]
+)
+def test_SAETrainer_fit_keeps_activation_scaler_loaded_from_checkpoint(
+    tmp_path: Path, normalize_activations: str
+):
+    cfg = build_runner_cfg(
+        normalize_activations=normalize_activations,
+        training_tokens=32,
+        train_batch_size_tokens=16,
+    )
+    trainer_cfg = cfg.to_sae_trainer_config()
+    trainer_cfg.n_batches_for_norm_estimate = 2
+    d_in = cfg.sae.d_in
+
+    trainer = SAETrainer(
+        sae=StandardTrainingSAE(cfg.sae),
+        data_provider=correlated_activations(d_in, batch_size=16),
+        cfg=trainer_cfg,
+    )
+    scaler = trainer.activation_scaler
+    if normalize_activations == "expected_average_only_in":
+        scaler.estimate_scaling_factor(
+            d_in=d_in,
+            data_provider=correlated_activations(d_in, batch_size=16),
+            n_batches_for_norm_estimate=2,
+        )
+    else:
+        scaler.estimate_whitening(
+            d_in=d_in,
+            data_provider=correlated_activations(d_in, batch_size=16),
+            n_batches_for_norm_estimate=2,
+        )
+    # pretend training already finished, so the resumed fit only folds the statistics
+    trainer.n_training_samples = trainer_cfg.total_training_samples
+    trainer.save_trainer_state(tmp_path)
+
+    sae = StandardTrainingSAE(cfg.sae)
+    random_params(sae)
+    expected = copy.deepcopy(sae)
+    if scaler.scaling_factor is not None:
+        expected.fold_activation_norm_scaling_factor(scaler.scaling_factor)
+    else:
+        assert scaler.whitening is not None
+        expected.fold_activation_whitening(
+            mean=scaler.whitening.mean,
+            whitening_matrix=scaler.whitening.matrix,
+            unwhitening_matrix=scaler.whitening.inverse_matrix,
+        )
+
+    # the resumed trainer sees a different activation distribution, so a
+    # re-estimate would fold different statistics than the checkpointed ones
+    resumed = SAETrainer(
+        sae=sae,
+        data_provider=correlated_activations(d_in, batch_size=16),
+        cfg=trainer_cfg,
+    )
+    resumed.load_trainer_state(tmp_path)
+    resumed.fit()
+
+    assert sae.cfg.normalize_activations == "none"
+    assert_close(sae.W_enc, expected.W_enc)
+    assert_close(sae.b_dec, expected.b_dec)
 
 
 def test_sae_trainer_saves_final_checkpoint_when_enabled(

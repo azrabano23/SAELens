@@ -162,6 +162,12 @@ class MatchingPursuitTrainingSAEConfig(TrainingSAEConfig):
 
     @override
     def __post_init__(self):
+        if self.normalize_activations == "covariance_whitening":
+            raise ValueError(
+                "normalize_activations='covariance_whitening' is not supported for "
+                "MatchingPursuitTrainingSAE, since the whitening cannot be folded into "
+                "its tied encoder after training"
+            )
         if self.decoder_init_norm != 1.0:
             self.decoder_init_norm = 1.0
             warnings.warn(

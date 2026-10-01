@@ -164,13 +164,21 @@ class SAETrainer(Generic[T_TRAINING_SAE, T_TRAINING_SAE_CONFIG]):
             desc="Training SAE",
         )
 
-        if self.sae.cfg.normalize_activations == "expected_average_only_in":
+        # Statistics loaded from a checkpoint are kept: the weights were trained
+        # against them, and a fresh estimate would not match them.
+        if (
+            self.sae.cfg.normalize_activations == "expected_average_only_in"
+            and self.activation_scaler.scaling_factor is None
+        ):
             self.activation_scaler.estimate_scaling_factor(
                 d_in=self.sae.cfg.d_in,
                 data_provider=self.data_provider,
                 n_batches_for_norm_estimate=self.cfg.n_batches_for_norm_estimate,
             )
-        elif self.sae.cfg.normalize_activations == "covariance_whitening":
+        elif (
+            self.sae.cfg.normalize_activations == "covariance_whitening"
+            and self.activation_scaler.whitening is None
+        ):
             self.activation_scaler.estimate_whitening(
                 d_in=self.sae.cfg.d_in,
                 data_provider=self.data_provider,
