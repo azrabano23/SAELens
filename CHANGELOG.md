@@ -1,5 +1,13 @@
 # CHANGELOG
 
+## v6.51.4 (2026-10-01)
+
+### Fix
+
+* fix: promote low-precision explained variance arithmetic in training logs (#744) ([`821498c`](https://github.com/decoderesearch/SAELens/commit/821498cda0706a063c140aa50f7cb9f843afef9a))
+
+* fix: promote low-precision explained variance arithmetic (#742) ([`5ee19f8`](https://github.com/decoderesearch/SAELens/commit/5ee19f80c5d016c1a5bc71c31d5c1cf172c800b4))
+
 ## v6.51.3 (2026-09-25)
 
 ### Fix
