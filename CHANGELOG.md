@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## v6.51.7 (2026-10-01)
+
+### Ci
+
+* ci: switch from Poetry to uv and speed up CI (#746) ([`af8fbed`](https://github.com/decoderesearch/SAELens/commit/af8fbed0c3663d6f57a3ff36b7a7301da912f0a6))
+
+### Fix
+
+* fix: load dictionary_learning JumpReluAutoEncoder SAEs in dictionary_learning_1 converter (#747) ([`2607aa0`](https://github.com/decoderesearch/SAELens/commit/2607aa027da834e9df9c4d614d1d80ab732b9902))
+
 ## v6.51.6 (2026-10-01)
 
 ### Fix
